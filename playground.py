@@ -6,23 +6,37 @@ This is a temporary script file.
 """
 
 import pandas as pd
+import seaborn as sns
 
 dataset = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/dataset/Chicago_Crimes_2001_to_2004.csv',
                       sep=',', header=0, error_bad_lines=False, low_memory=False, 
-                      na_values=[''])#, nrows=1602850)
+                      na_values=[''])
 
-# Parse Dates in File and specify format to speed up the operation
-dataset["Date"] = pd.to_datetime(dataset["Date"], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
+## Do some Data cleaning
+# Colums removed because we do not need them
+dataset = dataset.drop(columns=['Unnamed: 0', 'ID', 'Case Number'])
+# Colums removed because they contain to many missing values
+dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Longitude', 'Location'])
+dataset = dataset.drop_duplicates()
+dataset = dataset.dropna()
+
+## Parse Dates in File and specify format to speed up the operation
+dataset['Date'] = pd.to_datetime(dataset['Date'], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
 dataset['Updated On'] = pd.to_datetime(dataset['Updated On'], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
 
-# Parse some columns to type 'category'. This saves ~200MB of space
+## Do some value parsing
+dataset['IUCR'] = dataset['IUCR'].astype('category')
 dataset['Primary Type'] = dataset['Primary Type'].astype('category')
 dataset['Location Description'] = dataset['Location Description'].astype('category')
+dataset['Beat'] = dataset['Beat'].astype('int16')
+dataset['District'] = dataset['District'].astype('int16')
+dataset['Ward'] = dataset['Ward'].astype('int16')
+dataset['Community Area'] = dataset['Community Area'].astype('int16')
+dataset['Year'] = dataset['Year'].astype('int16')
+
+sns.pairplot(dataset[['Community Area', 'Arrest', 'Year', 'FBI Code']], hue='Year', palette="husl")
 
 
-#beats =  pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/Beat.csv',
-#                      sep=',', header=0, error_bad_lines=False, low_memory=False, 
-#                      na_values=[''])
 
 #print(beats)
 # optional step to read community Data and name areas
