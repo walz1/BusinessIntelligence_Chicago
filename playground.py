@@ -36,15 +36,15 @@ dataset['Community Area'] = dataset['Community Area'].astype('int16')
 dataset['Year'] = dataset['Year'].astype('int16')
 dataset['FBI Code'] = dataset['FBI Code'].astype('str')
 
-#tmpConvertPrimaryTypeToInt = dataset['Primary Type'].drop_duplicates().to_dict()
-#tmpConvertPrimaryTypeToInt = {v: k for k, v in tmpConvertPrimaryTypeToInt.items()}
-#dataset['Primary Type'] = dataset['Primary Type'].apply(lambda x: tmpConvertPrimaryTypeToInt.get(x))
+tmpConvertPrimaryTypeToInt = dataset['Primary Type'].drop_duplicates().to_dict()
+tmpConvertPrimaryTypeToInt = {v: k for k, v in tmpConvertPrimaryTypeToInt.items()}
+dataset['Primary Type'] = dataset['Primary Type'].apply(lambda x: tmpConvertPrimaryTypeToInt.get(x))
 
 #sns.pairplot(dataset[['Community Area', 'Arrest', 'Year', 'Primary Type']], hue='Primary Type', palette="husl")
 
 ## Correlation Analysis
 from scipy.stats import pearsonr
-tmp = pearsonr(dataset['Block'], dataset['Description'])
+tmp = pearsonr(dataset['Beat'], dataset['Primary Type'])
 #print("Show Pearson's correlation:")
 pearsonCorr = dataset.corr()
 #print(iris.corr())
