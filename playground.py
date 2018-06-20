@@ -7,10 +7,11 @@ This is a temporary script file.
 
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 dataset = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/dataset/Chicago_Crimes_2001_to_2004.csv',
                       sep=',', header=0, error_bad_lines=False, low_memory=False, 
-                      na_values=[''])
+                      na_values=[''], nrows=10000)
 
 ## Do some Data cleaning
 # Colums removed because we do not need them
@@ -33,9 +34,34 @@ dataset['District'] = dataset['District'].astype('int16')
 dataset['Ward'] = dataset['Ward'].astype('int16')
 dataset['Community Area'] = dataset['Community Area'].astype('int16')
 dataset['Year'] = dataset['Year'].astype('int16')
+dataset['FBI Code'] = dataset['FBI Code'].astype('str')
 
-sns.pairplot(dataset[['Community Area', 'Arrest', 'Year', 'FBI Code']], hue='Year', palette="husl")
+#tmpConvertPrimaryTypeToInt = dataset['Primary Type'].drop_duplicates().to_dict()
+#tmpConvertPrimaryTypeToInt = {v: k for k, v in tmpConvertPrimaryTypeToInt.items()}
+#dataset['Primary Type'] = dataset['Primary Type'].apply(lambda x: tmpConvertPrimaryTypeToInt.get(x))
 
+#sns.pairplot(dataset[['Community Area', 'Arrest', 'Year', 'Primary Type']], hue='Primary Type', palette="husl")
+
+## Correlation Analysis
+from scipy.stats import pearsonr
+tmp = pearsonr(dataset['Block'], dataset['Description'])
+#print("Show Pearson's correlation:")
+pearsonCorr = dataset.corr()
+#print(iris.corr())
+#
+#print("Show Spearman's rho correlation:")
+spearmanCorr = dataset.corr('spearman')
+#print(iris.corr('spearman'))
+#
+kendallCorr= dataset.corr('kendall')
+#print("Show Kendal's tau correlation:")
+#print(iris.corr('kendall'))
+#
+sns.heatmap(kendallCorr)
+plt.show()
+## Heatmap visualization of correlations
+#sns.heatmap(iris.corr('kendall'))
+#plt.show()
 
 
 #print(beats)
