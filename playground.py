@@ -20,6 +20,8 @@ from sklearn.model_selection import train_test_split
 from sklearn import tree, svm, datasets
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+import graphviz 
 
 ## Global Settings for multiprocessing
 num_partitions = 10 #number of partitions to split dataframe
@@ -103,12 +105,12 @@ print("Finished section: Data loading")
 
 print("Started section: Data preparation")
 ######################## Data selection ######################################
-"""
+#"""
 # Colums removed because we do not need them
-dataset = dataset.drop(columns=['Unnamed: 0', 'Case Number', 'ID', 'Community Area', 'Description', 'FBI Code', 'Updated On', 'Year', 'Location Description', 'IUCR'])
+#dataset = dataset.drop(columns=['Unnamed: 0', 'Case Number', 'ID', 'Community Area', 'Description', 'FBI Code', 'Updated On', 'Year', 'Location Description', 'IUCR'])
 
 # Colums removed because they contain to many missing values
-dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Longitude', 'Location'])
+#dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Longitude', 'Location'])
 #"""
 print("Finished subsection: Data selection")
 ######################## Data cleaning #######################################
@@ -118,8 +120,9 @@ def parallel_block_fix(data):
     data = data.apply(lambda x: fix_block(x))
     return data
 
-dataset['Block'] = parallelize_dataframe(dataset['Block'], parallel_block_fix)
 abc = dataset['Block'].dropna().drop_duplicates()
+dataset['Block'] = parallelize_dataframe(dataset['Block'], parallel_block_fix)
+
 
 tmpBlockWardDict = dataset[['Block', 'Ward']].drop_duplicates().dropna().set_index('Block')
 tmpBlockWardDict = tmpBlockWardDict.to_dict()
@@ -154,9 +157,10 @@ dataset = dataset.drop(columns=['Date'])
 
 # Convert categorials to binary encoded information --> Folienset 7 31
 binWard = pd.get_dummies(dataset.Ward)
+binBeat= pd.get_dummies(dataset.Beat)
 binPrimaryType = pd.get_dummies(dataset['Primary Type'])
 dataset = pd.concat([dataset, binWard], axis=1, join_axes=[dataset.index])
-
+#dataset = pd.concat([dataset, binBeat], axis=1, join_axes=[dataset.index])
 print("Finished subsection: Data construction & formatting")
 print("Finished section: Data preparation")
 #"""
@@ -222,32 +226,38 @@ print("Started section: Modeling")
 ### Decision Tree
 
 ## This will predict all categories within one run 
-"""
-x = dataset.drop(columns=['Arrest', 'Ward', 'Primary Type', 'Block'])
+#"""
+x = dataset.drop(columns=['Ward', 'Primary Type', 'Block'])
 y = binPrimaryType
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
-clf = tree.DecisionTreeClassifier()
+clf = tree.DecisionTreeRegressor()
 cl_fit = clf.fit(x_train, y_train)
-
+predictions = clf.predict(x_test)
 print("Model Accuracy:")
 print(clf.score(x_test, y_test))
-
-x_train = x_train.drop(columns=['Date-minute'])
-x_test = x_test.drop(columns=['Date-minute'])
+"""
 clf = tree.DecisionTreeClassifier()
 cl_fit = clf.fit(x_train, y_train)
-
+predictions = clf.predict(x_test)
 print("Model Accuracy:")
 print(clf.score(x_test, y_test))
+"""
+#x_train = x_train.drop(columns=['Date-minute'])
+#x_test = x_test.drop(columns=['Date-minute'])
+#clf = tree.DecisionTreeClassifier()
+#cl_fit = clf.fit(x_train, y_train)
+
+#print("Model Accuracy:")
+#print(clf.score(x_test, y_test))
 
 #"""
 
 ### Logistic Regression
 """
-x = dataset.drop(columns=['Arrest', 'Ward', 'Primary Type', 'Block'])
-y = binPrimaryType["MOTOR VEHICLE THEFT"]
+x = dataset.drop(columns=['Arrest', 'Domestic', 'Ward', 'Primary Type', 'Block', 'District'])
+y = binPrimaryType["THEFT"]
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
@@ -255,12 +265,12 @@ logRegression = LogisticRegression()
 logRegression.fit(x_train, y_train)
 predictions = logRegression.predict(x_test)
 score = logRegression.score(x_test, y_test)    
+cnf_matrix = confusion_matrix(y_test, predictions).ravel()
 #"""
 
-
 ### SVM
-
-x = dataset.drop(columns=['Arrest', 'Ward', 'Primary Type', 'Block'])
+"""
+x = dataset.drop(columns=['Arrest', 'Domestic', 'Ward', 'Primary Type', 'Block', 'District'])
 y = binPrimaryType["MOTOR VEHICLE THEFT"]
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
@@ -309,3 +319,13 @@ for i, clf in enumerate((svc, rbf_svc, nu_svc, lin_svc)):
 
 pl.axis('tight')
 pl.show()
+#"""
+"""
+dot_data = tree.export_graphviz(clf, out_file=None, 
+                         feature_names=x.feature_names,  
+                         class_names=dataset.target_names,  
+                         filled=True, rounded=True,  
+                         special_characters=True)  
+graph = graphviz.Source(dot_data)  
+graph 
+"""
