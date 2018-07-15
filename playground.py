@@ -22,11 +22,13 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 import graphviz 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.multioutput import MultiOutputClassifier
 
 ## Global Settings for multiprocessing
-num_partitions = 10 #number of partitions to split dataframe
-num_cores = 4 #number of cores on your machine
-
+NUM_PARTITIONS = 10 #number of partitions to split dataframe
+NUM_CORES = 4 #number of cores on your machine
+CORRELATION_SAMPLE_SIZE = 0.25
 ##############################################################################
 ######################## Method section ######################################
 ##############################################################################
@@ -61,13 +63,24 @@ def fix_block(toFix):
     return ' '.join(toFix)
 
 def basic_kendall_corr(data):
-    #data = data.sample(frac=0.5)
+    data = data.sample(frac=CORRELATION_SAMPLE_SIZE)
     return data.corr('kendall')
+
+def corr_multidimension_ptype(data, dataPrimary):
+    res = [0 for x in range(0, len(data.columns))]
+    i = 0
+    for column in data:
+        tmpDataFrame = pd.concat([data[column], dataPrimary], axis=1, join_axes=[data.index])
+        tmpDataFrame = tmpDataFrame.sample(frac=CORRELATION_SAMPLE_SIZE)
+        res[i] = tmpDataFrame.corr('kendall')
+        i+=1
+    return res
+
 
 ## http://www.racketracer.com/2016/07/06/pandas-in-parallel/
 def parallelize_dataframe(df, func):
-    df_split = np.array_split(df, num_partitions)
-    pool = Pool(num_cores)
+    df_split = np.array_split(df, NUM_PARTITIONS)
+    pool = Pool(NUM_CORES)
     df = pd.concat(pool.map(func, df_split))
     pool.close()
     pool.join()
@@ -161,16 +174,15 @@ binWard = pd.get_dummies(dataset.Ward)
 dataset = pd.concat([dataset, binWard], axis=1, join_axes=[dataset.index])
 
 binBeat= pd.get_dummies(dataset.Beat)
-#dataset = pd.concat([dataset, binBeat], axis=1, join_axes=[dataset.index])
 
-#binMonth = pd.get_dummies(dataset['Date-month'])
-#dataset = pd.concat([dataset, binMonth], axis=1, join_axes=[dataset.index])
+binMonth = pd.get_dummies(dataset['Date-month'])
+dataset = pd.concat([dataset, binMonth], axis=1, join_axes=[dataset.index])
 
-#binDay = pd.get_dummies(dataset['Date-day'])
-#dataset = pd.concat([dataset, binDay], axis=1, join_axes=[dataset.index])
+binDay = pd.get_dummies(dataset['Date-day'])
+dataset = pd.concat([dataset, binDay], axis=1, join_axes=[dataset.index])
 
-#binHour = pd.get_dummies(dataset['Date-hour'])
-#dataset = pd.concat([dataset, binHour], axis=1, join_axes=[dataset.index])
+binHour = pd.get_dummies(dataset['Date-hour'])
+dataset = pd.concat([dataset, binHour], axis=1, join_axes=[dataset.index])
 
 binMinute = pd.get_dummies(dataset['Date-minute'])
 dataset = pd.concat([dataset, binMinute], axis=1, join_axes=[dataset.index])
@@ -190,7 +202,7 @@ print("Started section: Data understanding")
 
 """
 ### Basic python drawing. For more elaborated visualization review our attached
-### HTML file.
+### HTML file (https://walz1.github.io/BusinessIntelligence_Chicago/)
 fig, ((axis1,axis2,axis3),(axis4,axis5,axis6)) = plt.subplots(nrows=2, ncols=3)
 fig.set_size_inches(18,6)
 
@@ -211,46 +223,18 @@ crimeType = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type'
 crimeTypeWard = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type', 'Ward' ] ).size()}).reset_index()
 crimeTypeBeat = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type', 'Beat' ] ).size()}).reset_index()
 
-"""
+
 ### Correlation Analyses
 
-def corr_ward_ptype():
-    res = [0 for x in range(0, len(binWard))]
-    for i in range (1, len(binWard) + 1):
-        tmpDataFrame = pd.concat([binWard[float(i)], binPrimaryType], axis=1, join_axes=[binWard.index])
-        tmpDataFrame = tmpDataFrame.sample(frac=0.25)
-        res[i-1] = tmpDataFrame.corr('kendall')
-    return res
+corrWardPtype = corr_multidimension_ptype(binWard, binPrimaryType)
+corrArrestPtype = basic_kendall_corr(pd.concat([dataset['Arrest'], binPrimaryType], axis=1, join_axes=[dataset.index]))
+corrDomesticPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
 
-def corr_date0_ptype(data):
-    res = [0 for x in range(0, len(data))]
-    for i in range (0, len(res)):
-        tmpDataFrame = pd.concat([data[i], binPrimaryType], axis=1, join_axes=[data.index])
-        tmpDataFrame = tmpDataFrame.sample(frac=0.25)
-        res[i] = tmpDataFrame.corr('kendall')
-    return res
-
-def corr_multidimension_ptype(data, dataPrimary):
-    res = [0 for x in range(0, len(data.columns))]
-    #for i in range (1, len(res) + 1):
-    i = 0
-    for column in data:
-        tmpDataFrame = pd.concat([data[column], dataPrimary], axis=1, join_axes=[data.index])
-        tmpDataFrame = tmpDataFrame.sample(frac=0.1)
-        res[i] = tmpDataFrame.corr('kendall')
-        i+=1
-    return res
-
-corrWardPtype = corr_multidimension_ptype(binWard)
-#corrArrestPtype = basic_kendall_corr(pd.concat([dataset['Arrest'], binPrimaryType], axis=1, join_axes=[dataset.index]))
-#corrDomesticPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
-
-#corrMonthPtype = corr_date1_ptype(binMinute)
-#corrDayPtype = corr_date1_ptype(binDay)
-#corrHourPytpe = corr_date0_ptype(binHour)
-
-#corrHourPtype = corr_date0_ptype(dataset['Date-hour'])
-
+corrMonthPtype = corr_multidimension_ptype(binMonth, binPrimaryType)
+corrDayPtype = corr_multidimension_ptype(binDay, binPrimaryType)
+corrHourPytpe = corr_multidimension_ptype(binHour, binPrimaryType)
+corrMinutePtype = corr_multidimension_ptype(binMinute, binPrimaryType)
+"""
 print("Finished section: Data understanding")
 
 ##############################################################################
@@ -262,23 +246,25 @@ print("Started section: Modeling")
 ### Decision Tree
 
 ## This will predict all categories within one run 
-"""
-x = dataset.drop(columns=['Ward', 'Primary Type', 'Block'])
+#"""
+x = dataset.drop(columns=['Ward', 'Primary Type', 'Block', 'Date-hour', 'Date-month', 'Date-day', 'Date-minute', 'Arrest', 'Domestic'])
 y = binPrimaryType
-
+x = x[1000000:]
+y = y[1000000:]
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
-clf = tree.DecisionTreeRegressor()
-cl_fit = clf.fit(x_train, y_train)
-predictions = clf.predict(x_test)
-print("Model Accuracy:")
-print(clf.score(x_test, y_test))
+forest = RandomForestClassifier(n_estimators=100, random_state=1)
+classifier = MultiOutputClassifier(forest, n_jobs=-1)
+classifier.fit(x_train, y_train)
+predict1 = classifier.predict(x_test)
+score1 = classifier.score(x_test, y_test)
 
-clf = tree.DecisionTreeClassifier()
-cl_fit = clf.fit(x_train, y_train)
-predictions = clf.predict(x_test)
-print("Model Accuracy:")
-print(clf.score(x_test, y_test))
+#clf = tree.DecisionTreeClassifier()
+#cl_fit = clf.fit(x_train, y_train)
+#predictions = clf.predict(x_test)
+#print("Model Accuracy:")
+#print(clf.score(x_test, y_test))
+
 """
 #x_train = x_train.drop(columns=['Date-minute'])
 #x_test = x_test.drop(columns=['Date-minute'])
@@ -291,7 +277,7 @@ print(clf.score(x_test, y_test))
 #"""
 
 ### Logistic Regression
-"""
+#"""
 x = dataset.drop(columns=['Arrest', 'Domestic', 'Ward', 'Primary Type', 'Block', 'District'])
 y = binPrimaryType["THEFT"]
 
@@ -299,8 +285,8 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
 logRegression = LogisticRegression()
 logRegression.fit(x_train, y_train)
-predictions = logRegression.predict(x_test)
-score = logRegression.score(x_test, y_test)    
+predict2 = logRegression.predict(x_test)
+score2 = logRegression.score(x_test, y_test)    
 cnf_matrix = confusion_matrix(y_test, predictions).ravel()
 #"""
 
@@ -356,12 +342,7 @@ for i, clf in enumerate((svc, rbf_svc, nu_svc, lin_svc)):
 pl.axis('tight')
 pl.show()
 #"""
-"""
-dot_data = tree.export_graphviz(clf, out_file=None, 
-                         feature_names=x.feature_names,  
-                         class_names=dataset.target_names,  
-                         filled=True, rounded=True,  
-                         special_characters=True)  
-graph = graphviz.Source(dot_data)  
-graph 
-"""
+
+#dot_data = tree.export_graphviz(clf, out_file=None) 
+#graph = graphviz.Source(dot_data) 
+#graph.render("crimes") 
