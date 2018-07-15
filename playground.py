@@ -76,6 +76,7 @@ def parallelize_dataframe(df, func):
 ##############################################################################
 ######################## Data loading ########################################
 ##############################################################################
+
 print("Started section: Data loading")
 """
 dataset_04 = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/dataset/Chicago_Crimes_2001_to_2004.csv',
@@ -93,12 +94,11 @@ dataset_11 = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/datase
 dataset_17 = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/dataset/Chicago_Crimes_2012_to_2017.csv',
                       sep=',', header=0, error_bad_lines=False, low_memory=False, 
                       na_values=[''])
-
-dataset = pd.concat([dataset_04, dataset_07, dataset_11, dataset_17])
 #"""
+dataset = pd.concat([dataset_04, dataset_07, dataset_11, dataset_17])
+
 print("Finished section: Data loading")
-# Datenset ohne Fix 7240967
-# Datenset mit Fix  7890196
+
 ##############################################################################
 ######################## Data preparation ####################################
 ##############################################################################
@@ -107,14 +107,15 @@ print("Started section: Data preparation")
 ######################## Data selection ######################################
 #"""
 # Colums removed because we do not need them
-#dataset = dataset.drop(columns=['Unnamed: 0', 'Case Number', 'ID', 'Community Area', 'Description', 'FBI Code', 'Updated On', 'Year', 'Location Description', 'IUCR'])
+dataset = dataset.drop(columns=['Unnamed: 0', 'Case Number', 'ID', 'Community Area', 'Description', 'FBI Code', 'Updated On', 'Year', 'Location Description', 'IUCR'])
 
 # Colums removed because they contain to many missing values
-#dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Longitude', 'Location'])
+dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Longitude', 'Location'])
 #"""
 print("Finished subsection: Data selection")
+
 ######################## Data cleaning #######################################
-"""
+#"""
 # Fix Blocks to contain ST, ND, RD, TH
 def parallel_block_fix(data):
     data = data.apply(lambda x: fix_block(x))
@@ -132,17 +133,17 @@ def parallel_ward_fix(data):
 
 dataset['Ward'] = parallelize_dataframe(dataset, parallel_ward_fix)
 dataset = dataset.dropna()
-
-print("Finished subsection: Data cleaning")
 #"""
+print("Finished subsection: Data cleaning")
+
 ######################## Data construction & formatting ######################
-"""
+#"""
 ## Parse Dates in File and specify format to speed up the operation
 # we create additional columns for single date attributes
 
 def parallel_dates(data):
     data['Date'] = pd.to_datetime(data['Date'], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
-    data['Date-year'] = data['Date'].dt.year
+ #   data['Date-year'] = data['Date'].dt.year
     data['Date-month'] = data['Date'].dt.month
     data['Date-day'] = data['Date'].dt.dayofweek
     data['Date-hour'] = data['Date'].dt.hour
@@ -157,13 +158,30 @@ dataset = dataset.drop(columns=['Date'])
 
 # Convert categorials to binary encoded information --> Folienset 7 31
 binWard = pd.get_dummies(dataset.Ward)
-binBeat= pd.get_dummies(dataset.Beat)
-binPrimaryType = pd.get_dummies(dataset['Primary Type'])
 dataset = pd.concat([dataset, binWard], axis=1, join_axes=[dataset.index])
+
+binBeat= pd.get_dummies(dataset.Beat)
 #dataset = pd.concat([dataset, binBeat], axis=1, join_axes=[dataset.index])
+
+#binMonth = pd.get_dummies(dataset['Date-month'])
+#dataset = pd.concat([dataset, binMonth], axis=1, join_axes=[dataset.index])
+
+#binDay = pd.get_dummies(dataset['Date-day'])
+#dataset = pd.concat([dataset, binDay], axis=1, join_axes=[dataset.index])
+
+#binHour = pd.get_dummies(dataset['Date-hour'])
+#dataset = pd.concat([dataset, binHour], axis=1, join_axes=[dataset.index])
+
+binMinute = pd.get_dummies(dataset['Date-minute'])
+dataset = pd.concat([dataset, binMinute], axis=1, join_axes=[dataset.index])
+
+binPrimaryType = pd.get_dummies(dataset['Primary Type'])
+
+
+#"""
 print("Finished subsection: Data construction & formatting")
 print("Finished section: Data preparation")
-#"""
+
 ##############################################################################
 ######################## Data understanding ##################################
 ##############################################################################
@@ -193,27 +211,45 @@ crimeType = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type'
 crimeTypeWard = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type', 'Ward' ] ).size()}).reset_index()
 crimeTypeBeat = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary Type', 'Beat' ] ).size()}).reset_index()
 
-
+"""
 ### Correlation Analyses
 
 def corr_ward_ptype():
     res = [0 for x in range(0, len(binWard))]
     for i in range (1, len(binWard) + 1):
-        tmpDataFrame = pd.concat([binWard[float(1)], binPrimaryType], axis=1, join_axes=[binWard.index])
+        tmpDataFrame = pd.concat([binWard[float(i)], binPrimaryType], axis=1, join_axes=[binWard.index])
         tmpDataFrame = tmpDataFrame.sample(frac=0.25)
         res[i-1] = tmpDataFrame.corr('kendall')
     return res
 
-def corr_date_ptype(data):
+def corr_date0_ptype(data):
     res = [0 for x in range(0, len(data))]
-    for i in range ()
+    for i in range (0, len(res)):
+        tmpDataFrame = pd.concat([data[i], binPrimaryType], axis=1, join_axes=[data.index])
+        tmpDataFrame = tmpDataFrame.sample(frac=0.25)
+        res[i] = tmpDataFrame.corr('kendall')
+    return res
 
-corrWardPtype = corr_with_ptype(binWard, binPrimaryType)
+def corr_multidimension_ptype(data, dataPrimary):
+    res = [0 for x in range(0, len(data.columns))]
+    #for i in range (1, len(res) + 1):
+    i = 0
+    for column in data:
+        tmpDataFrame = pd.concat([data[column], dataPrimary], axis=1, join_axes=[data.index])
+        tmpDataFrame = tmpDataFrame.sample(frac=0.1)
+        res[i] = tmpDataFrame.corr('kendall')
+        i+=1
+    return res
 
-corrArrestPtype = basic_kendall_corr(pd.concat([dataset['Arrest'], binPrimaryType], axis=1, join_axes=[dataset.index]))
-corrDomesticPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
-corrDayPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
-"""
+corrWardPtype = corr_multidimension_ptype(binWard)
+#corrArrestPtype = basic_kendall_corr(pd.concat([dataset['Arrest'], binPrimaryType], axis=1, join_axes=[dataset.index]))
+#corrDomesticPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
+
+#corrMonthPtype = corr_date1_ptype(binMinute)
+#corrDayPtype = corr_date1_ptype(binDay)
+#corrHourPytpe = corr_date0_ptype(binHour)
+
+#corrHourPtype = corr_date0_ptype(dataset['Date-hour'])
 
 print("Finished section: Data understanding")
 
@@ -226,7 +262,7 @@ print("Started section: Modeling")
 ### Decision Tree
 
 ## This will predict all categories within one run 
-#"""
+"""
 x = dataset.drop(columns=['Ward', 'Primary Type', 'Block'])
 y = binPrimaryType
 
@@ -237,7 +273,7 @@ cl_fit = clf.fit(x_train, y_train)
 predictions = clf.predict(x_test)
 print("Model Accuracy:")
 print(clf.score(x_test, y_test))
-"""
+
 clf = tree.DecisionTreeClassifier()
 cl_fit = clf.fit(x_train, y_train)
 predictions = clf.predict(x_test)
