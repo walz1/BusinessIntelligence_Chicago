@@ -36,7 +36,7 @@ dataset_04 = pd.read_csv('./dataset/Chicago_Crimes_2001_to_2004.csv',
 ## Nice to know
 * We have prepared some great visualizations of the dataset. You can play with them [here](https://walz1.github.io/BusinessIntelligence_Chicago/).
 * Within the /results folder you will find two .csv files containing already prepared result sets of the standard logistic regression and Bernoulli Naive Bayes method.  
-* The dataset is enormous, so bring plenty of time and patience, as well as a powerful notebook.
+* The dataset is enormous, so bring plenty of time and patience.
 * *Multinomial Logistic Regression* will need several hours (we did not manage to execute a full-blown test), you should think about a nightly run. The correlation analyses are also quite slow. We have added a global constant `CORRELATION_SAMPLE_SIZE = 0.25` to configure a sample size for the calculations.
 * We have used a MacBook Pro equipped with an i7 processor and 16GB RAM. You should not use your grandma's PC with this data.
 
