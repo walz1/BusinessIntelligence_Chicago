@@ -19,11 +19,11 @@ from multiprocessing import Pool
 from sklearn.model_selection import train_test_split
 from sklearn import tree, svm, datasets
 from sklearn.preprocessing import LabelEncoder
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.metrics import confusion_matrix
 import graphviz 
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.multioutput import MultiOutputClassifier
+import time
+from sklearn.naive_bayes import BernoulliNB
 
 ## Global Settings for multiprocessing
 NUM_PARTITIONS = 10 #number of partitions to split dataframe
@@ -34,9 +34,6 @@ CORRELATION_SAMPLE_SIZE = 0.25
 ##############################################################################
 
 def fix_block(toFix):
-    """
-    Here we need to describe the method
-    """
     toFix = toFix.split()
     if (len(toFix) >= 3 and toFix[2][0].isdigit() and toFix[2][len(toFix[2]) - 1].isdigit()):
         if toFix[2][len(toFix[2]) - 1] == '1':
@@ -107,9 +104,9 @@ dataset_11 = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/datase
 dataset_17 = pd.read_csv('~/Documents/GitHub/BusinessIntelligence_Chicago/dataset/Chicago_Crimes_2012_to_2017.csv',
                       sep=',', header=0, error_bad_lines=False, low_memory=False, 
                       na_values=[''])
-#"""
-dataset = pd.concat([dataset_04, dataset_07, dataset_11, dataset_17])
 
+dataset = pd.concat([dataset_04, dataset_07, dataset_11, dataset_17])
+#"""
 print("Finished section: Data loading")
 
 ##############################################################################
@@ -118,7 +115,7 @@ print("Finished section: Data loading")
 
 print("Started section: Data preparation")
 ######################## Data selection ######################################
-#"""
+"""
 # Colums removed because we do not need them
 dataset = dataset.drop(columns=['Unnamed: 0', 'Case Number', 'ID', 'Community Area', 'Description', 'FBI Code', 'Updated On', 'Year', 'Location Description', 'IUCR'])
 
@@ -128,13 +125,13 @@ dataset = dataset.drop(columns=['X Coordinate', 'Y Coordinate', 'Latitude', 'Lon
 print("Finished subsection: Data selection")
 
 ######################## Data cleaning #######################################
-#"""
+"""
+
 # Fix Blocks to contain ST, ND, RD, TH
 def parallel_block_fix(data):
     data = data.apply(lambda x: fix_block(x))
     return data
 
-abc = dataset['Block'].dropna().drop_duplicates()
 dataset['Block'] = parallelize_dataframe(dataset['Block'], parallel_block_fix)
 
 
@@ -150,13 +147,13 @@ dataset = dataset.dropna()
 print("Finished subsection: Data cleaning")
 
 ######################## Data construction & formatting ######################
-#"""
+"""
 ## Parse Dates in File and specify format to speed up the operation
 # we create additional columns for single date attributes
 
 def parallel_dates(data):
     data['Date'] = pd.to_datetime(data['Date'], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
- #   data['Date-year'] = data['Date'].dt.year
+    data['Date-year'] = data['Date'].dt.year
     data['Date-month'] = data['Date'].dt.month
     data['Date-day'] = data['Date'].dt.dayofweek
     data['Date-hour'] = data['Date'].dt.hour
@@ -171,24 +168,18 @@ dataset = dataset.drop(columns=['Date'])
 
 # Convert categorials to binary encoded information --> Folienset 7 31
 binWard = pd.get_dummies(dataset.Ward)
-dataset = pd.concat([dataset, binWard], axis=1, join_axes=[dataset.index])
-
+binDistrict = pd.get_dummies(dataset.District)
 binBeat= pd.get_dummies(dataset.Beat)
 
+binYear = pd.get_dummies(dataset['Date-year'])
 binMonth = pd.get_dummies(dataset['Date-month'])
-dataset = pd.concat([dataset, binMonth], axis=1, join_axes=[dataset.index])
-
 binDay = pd.get_dummies(dataset['Date-day'])
-dataset = pd.concat([dataset, binDay], axis=1, join_axes=[dataset.index])
-
 binHour = pd.get_dummies(dataset['Date-hour'])
-dataset = pd.concat([dataset, binHour], axis=1, join_axes=[dataset.index])
-
 binMinute = pd.get_dummies(dataset['Date-minute'])
-dataset = pd.concat([dataset, binMinute], axis=1, join_axes=[dataset.index])
 
 binPrimaryType = pd.get_dummies(dataset['Primary Type'])
-
+labelPrimaryType = dataset['Primary Type'].astype('category')
+labelPrimaryType = labelPrimaryType.cat.codes
 
 #"""
 print("Finished subsection: Data construction & formatting")
@@ -227,9 +218,11 @@ crimeTypeBeat = pd.core.frame.DataFrame({'count' : dataset.groupby( [ 'Primary T
 ### Correlation Analyses
 
 corrWardPtype = corr_multidimension_ptype(binWard, binPrimaryType)
+corrDistrictPtype = corr_multidimension_ptype(binDistrict, binPrimaryType)
 corrArrestPtype = basic_kendall_corr(pd.concat([dataset['Arrest'], binPrimaryType], axis=1, join_axes=[dataset.index]))
 corrDomesticPtype = basic_kendall_corr(pd.concat([dataset['Domestic'], binPrimaryType], axis=1, join_axes=[dataset.index]))
 
+corrYearPtype = corr_multidimension_ptype(binYear, binPrimaryType)
 corrMonthPtype = corr_multidimension_ptype(binMonth, binPrimaryType)
 corrDayPtype = corr_multidimension_ptype(binDay, binPrimaryType)
 corrHourPytpe = corr_multidimension_ptype(binHour, binPrimaryType)
@@ -246,103 +239,109 @@ print("Started section: Modeling")
 ### Decision Tree
 
 ## This will predict all categories within one run 
-#"""
-x = dataset.drop(columns=['Ward', 'Primary Type', 'Block', 'Date-hour', 'Date-month', 'Date-day', 'Date-minute', 'Arrest', 'Domestic'])
-y = binPrimaryType
-x = x[1000000:]
-y = y[1000000:]
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
-
-forest = RandomForestClassifier(n_estimators=100, random_state=1)
-classifier = MultiOutputClassifier(forest, n_jobs=-1)
-classifier.fit(x_train, y_train)
-predict1 = classifier.predict(x_test)
-score1 = classifier.score(x_test, y_test)
-
-#clf = tree.DecisionTreeClassifier()
-#cl_fit = clf.fit(x_train, y_train)
-#predictions = clf.predict(x_test)
-#print("Model Accuracy:")
-#print(clf.score(x_test, y_test))
-
 """
-#x_train = x_train.drop(columns=['Date-minute'])
-#x_test = x_test.drop(columns=['Date-minute'])
-#clf = tree.DecisionTreeClassifier()
-#cl_fit = clf.fit(x_train, y_train)
-
-#print("Model Accuracy:")
-#print(clf.score(x_test, y_test))
+print("Decision Tree")
+x = dataset.drop(columns=['Primary Type', 'Block', 'Arrest', 'Domestic', 'Ward'])
+y = binPrimaryType
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+dTree = tree.DecisionTreeClassifier(criterion='entropy', splitter='best', max_depth=None, min_samples_split=2, 
+                                    min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_features=None, 
+                                    random_state=None, max_leaf_nodes=None, min_impurity_decrease=0.0, 
+                                    min_impurity_split=None, class_weight=None, presort=False)
+dTree = dTree.fit(x_train, y_train)
+predictDTree = dTree.predict(x_test)
+scoreDTree = dTree.score(x_test, y_test)
 
 #"""
 
 ### Logistic Regression
-#"""
-x = dataset.drop(columns=['Arrest', 'Domestic', 'Ward', 'Primary Type', 'Block', 'District'])
-y = binPrimaryType["THEFT"]
-
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
-
-logRegression = LogisticRegression()
-logRegression.fit(x_train, y_train)
-predict2 = logRegression.predict(x_test)
-score2 = logRegression.score(x_test, y_test)    
-cnf_matrix = confusion_matrix(y_test, predictions).ravel()
-#"""
-
-### SVM
 """
-x = dataset.drop(columns=['Arrest', 'Domestic', 'Ward', 'Primary Type', 'Block', 'District'])
-y = binPrimaryType["MOTOR VEHICLE THEFT"]
+print("Logistic Regression")
 
+resSetLR = pd.DataFrame(columns=['Type', 'Score', 'tn', 'fp', 'fn', 'tp'])
+x = pd.concat([binBeat, binMonth, binDay, binHour, binMinute], axis=1, join_axes=[binBeat.index])
+logRegression = LogisticRegression(penalty='l2', dual=False, tol=0.0001, C=1.0, fit_intercept=False, 
+                                   intercept_scaling=1, class_weight=None, random_state=None, solver='liblinear', 
+                                   max_iter=100, multi_class='ovr', verbose=0, warm_start=False, n_jobs=1)
+i = 0
+for column in binPrimaryType:
+    start = time.time()
+    print("Calculating for ", column)
+    if(binPrimaryType[column].sum() > 5):
+        y = binPrimaryType[column]
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+
+        logRegression.fit(x_train, y_train)
+        predictLogRegression = logRegression.predict(x_test)
+        scoreLogRegression = logRegression.score(x_test, y_test)
+        tn, fp, fn, tp = confusion_matrix(y_test, predictLogRegression).ravel()
+        resSetLR.loc[i] = [column, scoreLogRegression, tn, fp, fn, tp]
+        i += 1
+    print(time.time()-start)
+#"""
+    
+"""
+print("Logistic Regression with cross-validation")
+
+resSetLRCV = pd.DataFrame(columns=['Type', 'Score', 'tn', 'fp', 'fn', 'tp'])
+x = pd.concat([binBeat, binMonth, binDay, binHour, binMinute], axis=1, join_axes=[binBeat.index])
+logRegression = LogisticRegressionCV(Cs=10, fit_intercept=True, cv=None, dual=False, penalty='l2', 
+                                     scoring=None, solver='lbfgs', tol=0.0001, max_iter=100, class_weight=None, 
+                                     n_jobs=1, verbose=0, refit=True, intercept_scaling=1.0, multi_class='ovr', 
+                                     random_state=None)
+i = 0
+for column in binPrimaryType:
+    start = time.time()
+    print("Calculating for ", column)
+    if(binPrimaryType[column].sum() > 5):
+        y = binPrimaryType[column]
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+
+        logRegression.fit(x_train, y_train)
+        predictLogRegression = logRegression.predict(x_test)
+        scoreLogRegression = logRegression.score(x_test, y_test)
+        tn, fp, fn, tp = confusion_matrix(y_test, predictLogRegression).ravel()
+        resSetLRCV.loc[i] = [column, scoreLogRegression, tn, fp, fn, tp]
+        i += 1
+    print(time.time()-start)
+#"""
+    
+"""
+print("Multinomial Logistic Regression")
+
+x = pd.concat([binBeat, binMonth, binDay, binHour, binMinute], axis=1, join_axes=[binBeat.index])
+y = labelPrimaryType
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
-h=.02 # step size in the mesh
-X = x_train
-Y = y_train
-# we create an instance of SVM and fit out data. We do not scale our
-# data since we want to plot the support vectors
-svc     = svm.SVC(kernel='linear').fit(X, Y)
-rbf_svc = svm.SVC(kernel='poly').fit(X, Y)
-nu_svc  = svm.NuSVC(kernel='linear').fit(X,Y)
-lin_svc = svm.LinearSVC().fit(X, Y)
-
-# create a mesh to plot in
-x_min, x_max = X[:,0].min()-1, X[:,0].max()+1
-y_min, y_max = X[:,1].min()-1, X[:,1].max()+1
-xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
-                     np.arange(y_min, y_max, h))
-
-# title for the plots
-titles = ['SVC with linear kernel',
-          'SVC with polynomial (degree 3) kernel',
-          'NuSVC with linear kernel',
-          'LinearSVC (linear kernel)']
-
-
-pl.set_cmap(pl.get_cmap('jet'))
-
-for i, clf in enumerate((svc, rbf_svc, nu_svc, lin_svc)):
-    # Plot the decision boundary. For that, we will asign a color to each
-    # point in the mesh [x_min, m_max]x[y_min, y_max].
-    pl.subplot(2, 2, i+1)
-    Z = clf.predict(np.c_[xx.ravel(), yy.ravel()])
-
-    # Put the result into a color plot
-    Z = Z.reshape(xx.shape)
-    pl.set_cmap(pl.get_cmap('Accent'))
-    pl.contourf(xx, yy, Z)
-    pl.axis('tight')
-
-    # Plot also the training points
-    pl.scatter(X[:,0], X[:,1], c=Y)
-
-    pl.title(titles[i])
-
-pl.axis('tight')
-pl.show()
+multLogRegression = LogisticRegression(penalty='l2', dual=False, tol=0.0001, C=1.0, fit_intercept=False, 
+                                   intercept_scaling=1, class_weight=None, random_state=None, solver='newton-cg', 
+                                   max_iter=100, multi_class='multinomial', verbose=0, warm_start=False, n_jobs=1)
+multLogRegression.fit(x_train, y_train)
+predictMultLogRegression = multLogRegression.predict(x_test)
+scoreMultLogRegression = multLogRegression.score(x_test, y_test)
+test = confusion_matrix(y_test, predictMultLogRegression)
 #"""
 
-#dot_data = tree.export_graphviz(clf, out_file=None) 
-#graph = graphviz.Source(dot_data) 
-#graph.render("crimes") 
+### Bernoulli Naive Bayes
+"""
+print("Bernoulli Naive Bayes")
+
+resSetNB = pd.DataFrame(columns=['Type', 'Score', 'tn', 'fp', 'fn', 'tp'])
+x = pd.concat([binBeat, binMonth, binDay, binHour, binMinute], axis=1, join_axes=[binBeat.index])
+bernoulli = BernoulliNB(alpha=1.0, binarize=0.0, fit_prior=True, class_prior=None)
+i = 0
+for column in binPrimaryType:
+    start = time.time()
+    print("Calculating for ", column)
+    if(binPrimaryType[column].sum() > 5):
+        y = binPrimaryType[column]
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+        
+        bernoulli.fit(x_train, y_train)
+        predictNB = bernoulli.predict(x_test)
+        scoreNB = bernoulli.score(x_test, y_test)
+        tn, fp, fn, tp = confusion_matrix(y_test, predictNB).ravel()
+        resSetNB.loc[i] = [column, scoreNB, tn, fp, fn, tp]
+        i += 1
+    print(time.time()-start)
+#"""
