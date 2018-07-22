@@ -29,7 +29,7 @@ dataset_04 = pd.read_csv('./dataset/Chicago_Crimes_2001_to_2004.csv',
 #"""
 ```
 
-* The section *Data understanding* is commented by default, as the correlation analyses needs quite long. 
+* The section *Data understanding* is commented out by default, as the correlation analyses needs quite long. 
 * Within the *Modeling* section we have commented all models except for *Decision Tree*. You can add or remove them as you like.
 * The code is not very talkative and does not write many results to stdout. We have used a slightly customized MatLab layout of Spyder.
 
