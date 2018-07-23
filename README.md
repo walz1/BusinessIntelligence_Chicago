@@ -7,7 +7,7 @@
 
 ## How to use
 
-**Important:** We have implemented a parallelization strategy, which is activated by default. If you are using a windows machine search for the *Globals section* (top of code) and set `RUN_PARALLEL = False`
+**Important:** We have implemented a parallelization strategy, which is deactivated by default. If you are using a unix / macOS machine, search for the *Globals section* (top of code) and set `RUN_PARALLEL = True` to fasten the execution.
 
 * All sections are surrounded by triple quotes. They allow you to comment / uncomment whole sections: 
 
